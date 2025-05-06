@@ -30,9 +30,6 @@ if prompt := st.chat_input("What is up?"):
         # Check if prompt indicates we should use CrewAI
         if "crew" in prompt.lower() or "research" in prompt.lower():
             with st.spinner("Running CrewAI..."):
-                # Initialize CrewAI
-                crew_instance = LatestAiDevelopment()
-                
                 # Create an expander to show thinking steps if desired
                 thinking_expander = st.expander("View CrewAI thinking process")
                 
@@ -42,56 +39,35 @@ if prompt := st.chat_input("What is up?"):
                 # Pass the topic parameter instead of query, and include current_year
                 current_year = datetime.datetime.now().year
                 
-                # Set up a crew with verbose output enabled
-                crew = crew_instance.crew()
-                
-                # Setup a function to capture verbose output
-                def verbose_callback(output):
-                    if output and isinstance(output, str):
-                        # Remove ANSI color codes and formatting
-                        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                        clean_output = ansi_escape.sub('', output)
+                # Define step callback function
+                def step_callback(step_output):
+                    if step_output:
+                        thought_text = f"### 👤 Agent: {getattr(step_output, 'agent', 'Unknown')}\n"
                         
-                        # Format specific patterns to make them more readable
-                        formatted_output = clean_output
+                        # Get task name or description
+                        task_name = getattr(step_output, 'name', None)
+                        task_desc = getattr(step_output, 'description', None)
                         
-                        # Format "# Agent:" headers
-                        formatted_output = re.sub(r'# Agent:\s+(.*?)$', r'### 👤 Agent: \1', formatted_output, flags=re.MULTILINE)
+                        if task_name:
+                            thought_text += f"**📋 Task Name:** {task_name}\n\n"
                         
-                        # Format "## Task:" headers
-                        formatted_output = re.sub(r'## Task:\s+(.*?)$', r'**📋 Task:** \1', formatted_output, flags=re.MULTILINE)
+                        if task_desc:
+                            thought_text += f"**📋 Description:** {task_desc}\n\n"
                         
-                        # Format "## Final Answer:" headers
-                        formatted_output = re.sub(r'## Final Answer:\s*$', r'**✅ Final Answer:**', formatted_output, flags=re.MULTILINE)
-                        
-                        # Format "Step-by-Step Plan" sections
-                        formatted_output = re.sub(r'Step-by-Step Plan', r'**📝 Step-by-Step Plan**', formatted_output)
-                        
-                        thought_text = formatted_output
                         thinking_steps.append(thought_text)
                         with thinking_expander:
                             st.markdown(thought_text)
                 
-                # Monkey patch the print function to capture verbose output during crew execution
-                import builtins
-                original_print = builtins.print
+                # Initialize CrewAI with the step callback
+                crew_instance = LatestAiDevelopment(step_callback=step_callback)
                 
-                def custom_print(*args, **kwargs):
-                    output = " ".join(str(arg) for arg in args)
-                    verbose_callback(output)
-                    return original_print(*args, **kwargs)
+                # Set up a crew
+                crew = crew_instance.crew()
                 
-                # Replace the print function temporarily
-                builtins.print = custom_print
-                
-                try:
-                    # Run CrewAI with verbose output
-                    crew_result = crew.kickoff(
-                        inputs={"topic": prompt, "current_year": current_year}
-                    )
-                finally:
-                    # Restore the original print function
-                    builtins.print = original_print
+                # Run CrewAI
+                crew_result = crew.kickoff(
+                    inputs={"topic": prompt, "current_year": current_year}
+                )
                 
                 # Process the CrewAI response through OpenAI
                 if isinstance(crew_result, dict) and "raw" in crew_result:
@@ -102,13 +78,7 @@ if prompt := st.chat_input("What is up?"):
                 # Capture thinking steps for the response
                 thinking_summary = ""
                 if thinking_steps:
-                    # Join thinking steps but filter out duplicates and empty lines
-                    unique_steps = []
-                    for step in thinking_steps:
-                        if step.strip() and step not in unique_steps:
-                            unique_steps.append(step)
-                    
-                    thinking_summary = "\n\n### 🧠 CrewAI Thinking Process:\n\n" + "\n\n".join(unique_steps)
+                    thinking_summary = "\n\n### 🧠 CrewAI Thinking Process:\n\n" + "\n\n".join(thinking_steps)
                 
                 # Send the crew result to OpenAI for processing
                 openai_response = client.chat.completions.create(

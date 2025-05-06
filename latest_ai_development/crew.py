@@ -13,6 +13,10 @@ class LatestAiDevelopment():
     agents: List[BaseAgent]
     tasks: List[Task]
 
+    def __init__(self, step_callback=None):
+        """Initialize with optional step_callback"""
+        self.step_callback = step_callback
+
     # Learn more about YAML configuration files here:
     # Agents: https://docs.crewai.com/concepts/agents#yaml-configuration-recommended
     # Tasks: https://docs.crewai.com/concepts/tasks#yaml-configuration-recommended
@@ -23,14 +27,16 @@ class LatestAiDevelopment():
     def researcher(self) -> Agent:
         return Agent(
             config=self.agents_config['researcher'], # type: ignore[index]
-            verbose=True
+            verbose=True,
+            # step_callback=self.step_callback
         )
 
     @agent
     def reporting_analyst(self) -> Agent:
         return Agent(
             config=self.agents_config['reporting_analyst'], # type: ignore[index]
-            verbose=True
+            verbose=True,
+            # step_callback=self.step_callback
         )
 
     # To learn more about structured task outputs,
@@ -60,5 +66,7 @@ class LatestAiDevelopment():
             tasks=self.tasks, # Automatically created by the @task decorator
             process=Process.sequential,
             verbose=True,
+            # step_callback=self.step_callback,
+            task_callback=self.step_callback
             # process=Process.hierarchical, # In case you wanna use that instead https://docs.crewai.com/how-to/Hierarchical/
         )
